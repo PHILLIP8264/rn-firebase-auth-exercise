@@ -5,19 +5,44 @@ import {
   Button,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import React, { useState, useEffect } from "react";
-import { logoutUser, getCurrentUser } from "../services/authService";
-import { User } from "firebase/auth";
+import { logoutUser, getUserFromDatabase } from "../services/authService";
+import { useAuth } from "../contexts/AuthContext";
+
+interface UserData {
+  uid: string;
+  email: string;
+  createdAt: any;
+  lastLoginAt: any;
+  displayName?: string;
+}
 
 const ProfileScreen = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useAuth();
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
 
   useEffect(() => {
-    // Get current user when component mounts
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-  }, []);
+    // Get user data from Firestore when component mounts
+    const fetchUserData = async () => {
+      if (user) {
+        try {
+          const result = await getUserFromDatabase(user.uid);
+          if (result.success && result.userData) {
+            setUserData(result.userData);
+          }
+        } catch (error) {
+          console.warn("Failed to fetch user data from database");
+        } finally {
+          setIsLoadingUserData(false);
+        }
+      }
+    };
+
+    fetchUserData();
+  }, [user]);
 
   // Handle logout functionality
   const handleLogout = async () => {
@@ -52,25 +77,46 @@ const ProfileScreen = () => {
         <Text style={styles.title}>Profile</Text>
 
         <View style={styles.userInfo}>
-          <Text style={styles.label}>Email:</Text>
-          <Text style={styles.value}>{user?.email || "No email"}</Text>
+          {isLoadingUserData ? (
+            <ActivityIndicator size="small" color="#000" />
+          ) : (
+            <>
+              <Text style={styles.label}>Email:</Text>
+              <Text style={styles.value}>
+                {user?.email || userData?.email || "No email"}
+              </Text>
 
-          <Text style={styles.label}>User ID:</Text>
-          <Text style={styles.value}>{user?.uid || "No user ID"}</Text>
+              <Text style={styles.label}>User ID:</Text>
+              <Text style={styles.value}>{user?.uid || "No user ID"}</Text>
 
-          <Text style={styles.label}>Account Created:</Text>
-          <Text style={styles.value}>
-            {user?.metadata?.creationTime
-              ? new Date(user.metadata.creationTime).toLocaleDateString()
-              : "Unknown"}
-          </Text>
+              <Text style={styles.label}>Display Name:</Text>
+              <Text style={styles.value}>
+                {userData?.displayName || user?.displayName || "Not set"}
+              </Text>
 
-          <Text style={styles.label}>Last Sign In:</Text>
-          <Text style={styles.value}>
-            {user?.metadata?.lastSignInTime
-              ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
-              : "Unknown"}
-          </Text>
+              <Text style={styles.label}>Account Created:</Text>
+              <Text style={styles.value}>
+                {userData?.createdAt
+                  ? new Date(
+                      userData.createdAt.seconds * 1000
+                    ).toLocaleDateString()
+                  : user?.metadata?.creationTime
+                  ? new Date(user.metadata.creationTime).toLocaleDateString()
+                  : "Unknown"}
+              </Text>
+
+              <Text style={styles.label}>Last Sign In:</Text>
+              <Text style={styles.value}>
+                {userData?.lastLoginAt
+                  ? new Date(
+                      userData.lastLoginAt.seconds * 1000
+                    ).toLocaleDateString()
+                  : user?.metadata?.lastSignInTime
+                  ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
+                  : "Unknown"}
+              </Text>
+            </>
+          )}
         </View>
 
         <Button title="Sign Out" color="red" onPress={handleLogout} />

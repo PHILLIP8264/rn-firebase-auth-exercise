@@ -7,7 +7,55 @@ import {
   onAuthStateChanged,
   User,
 } from "firebase/auth";
-import { auth } from "../firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
+
+interface UserData {
+  uid: string;
+  email: string;
+  createdAt: Date;
+  lastLoginAt: Date;
+  displayName?: string;
+}
+
+// Save user data to Firestore
+export const saveUserToDatabase = async (
+  user: User
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const userData: UserData = {
+      uid: user.uid,
+      email: user.email || "",
+      createdAt: new Date(),
+      lastLoginAt: new Date(),
+      displayName: user.displayName || "",
+    };
+
+    await setDoc(doc(db, "users", user.uid), userData);
+    console.log("User data saved to Firestore");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error saving user to database:", error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get user data from Firestore
+export const getUserFromDatabase = async (
+  uid: string
+): Promise<{ success: boolean; userData?: UserData; error?: string }> => {
+  try {
+    const userDoc = await getDoc(doc(db, "users", uid));
+    if (userDoc.exists()) {
+      return { success: true, userData: userDoc.data() as UserData };
+    } else {
+      return { success: false, error: "User data not found" };
+    }
+  } catch (error: any) {
+    console.error("Error getting user from database:", error.message);
+    return { success: false, error: error.message };
+  }
+};
 
 // Login user function
 export const loginUser = async (
@@ -22,6 +70,19 @@ export const loginUser = async (
     );
     const user = userCredential.user;
     console.log("User logged in successfully:", user.email);
+
+    // Update last login time in database
+    try {
+      await setDoc(
+        doc(db, "users", user.uid),
+        { lastLoginAt: new Date() },
+        { merge: true }
+      );
+    } catch (dbError) {
+      console.warn("Failed to update last login time:", dbError);
+      // Don't fail login if database update fails
+    }
+
     return { success: true, user };
   } catch (error: any) {
     console.error("Login error:", error.message);
@@ -42,6 +103,14 @@ export const registerUser = async (
     );
     const user = userCredential.user;
     console.log("User registered successfully:", user.email);
+
+    // Save user data to Firestore database
+    const saveResult = await saveUserToDatabase(user);
+    if (!saveResult.success) {
+      console.warn("Failed to save user to database:", saveResult.error);
+      // Don't fail registration if database save fails
+    }
+
     return { success: true, user };
   } catch (error: any) {
     console.error("Registration error:", error.message);

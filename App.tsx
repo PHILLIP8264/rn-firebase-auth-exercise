@@ -1,32 +1,16 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import LoginScreen from "./screens/LoginScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import RegistrationScreen from "./screens/RegistrationScreen";
-import { onAuthStateChange } from "./services/authService";
-import { User } from "firebase/auth";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
 const Stack = createStackNavigator();
 
-export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChange((user: User | null) => {
-      if (user) {
-        setIsLoggedIn(true);
-      } else {
-        setIsLoggedIn(false);
-      }
-      setIsLoading(false);
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
-  }, []);
+const AppContent = () => {
+  const { isAuthenticated, isLoading } = useAuth();
 
   // Show loading screen while checking auth state
   if (isLoading) {
@@ -36,9 +20,10 @@ export default function App() {
       </View>
     );
   }
+
   return (
     <NavigationContainer>
-      {isLoggedIn ? (
+      {isAuthenticated ? (
         <Stack.Navigator>
           <Stack.Screen
             name="Profile"
@@ -62,8 +47,15 @@ export default function App() {
       )}
     </NavigationContainer>
   );
-}
+};
 
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
